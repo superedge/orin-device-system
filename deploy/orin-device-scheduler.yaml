@@ -1,0 +1,104 @@
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: orin-device-scheduler
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - update
+      - patch
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - bindings
+      - pods/binding
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+      - update
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orin-device-scheduler
+  namespace: kube-system
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: orin-device-scheduler
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orin-device-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: orin-device-scheduler
+    namespace: kube-system
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: orin-device-scheduler
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orin-device-scheduler
+  template:
+    metadata:
+      labels:
+        app: orin-device-scheduler
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+    spec:
+      serviceAccount: orin-device-scheduler
+      containers:
+        - name: sched
+          image: ccr.ccs.tencentyun.com/tkeedge/orin-device-scheduler:latest
+          command: ["/usr/bin/orin-scheduler"]
+          args: 
+          - -v=6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orin-device-scheduler
+  namespace: kube-system
+  labels:
+    app: orin-device-scheduler
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: orin-device-scheduler
