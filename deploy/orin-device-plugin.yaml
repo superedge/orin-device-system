@@ -1,0 +1,119 @@
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: orin-device-plugin
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - update
+      - patch
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+      - update
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orin-device-plugin
+  namespace: kube-system
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: orin-device-plugin
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orin-device-plugin
+subjects:
+  - kind: ServiceAccount
+    name: orin-device-plugin
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: orin-device-plugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: orin-device-plugin
+  template:
+    metadata:
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      labels:
+        app: orin-device-plugin
+    spec:
+      serviceAccount: orin-device-plugin
+      hostNetwork: true
+      containers:
+        - image: ccr.ccs.tencentyun.com/tkeedge/orin-device-plugin:506-2
+          command: [ "/usr/bin/orin-device-plugin", "--node-name=$(NODE_NAME)", "--provider=file", "--provider-config=/data/edge/orin-device-file.yaml" ]
+          name: device-plugin
+          resources:
+            limits:
+              memory: "300Mi"
+              cpu: "1"
+            requests:
+              memory: "300Mi"
+              cpu: "1"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: pod-resources
+              mountPath: /var/lib/kubelet/pod-resources
+            - name: host-var
+              mountPath: /host/var
+            - name: host-dev
+              mountPath: /host/dev
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: pod-resources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+        - name: host-var
+          hostPath:
+            type: Directory
+            path: /var
+        - name: host-dev
+          hostPath:
+            type: Directory
+            path: /dev
